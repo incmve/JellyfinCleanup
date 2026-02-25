@@ -727,7 +727,8 @@ function log(msg, type='') {
 }
 
 async function jellyFetch(path, opts={}) {
-  const res = await fetch(`${serverUrl}${path}`, {
+  const base = serverUrl.replace(/\/$/, '');
+  const res = await fetch(`${base}${path}`, {
     ...opts,
     headers: {
       'X-Emby-Token': apiKey,
