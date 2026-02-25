@@ -9,3 +9,5 @@ docker compose up -d
 ```
 
 Open [http://localhost:8099](http://localhost:8099)
+
+![JellyClean](jellyclean.png)
