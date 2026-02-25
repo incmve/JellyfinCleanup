@@ -5,3 +5,8 @@ services:
     restart: unless-stopped
     ports:
       - "8099:80"
+    volumes:
+      - jellyclean-data:/data
+
+volumes:
+  jellyclean-data:
