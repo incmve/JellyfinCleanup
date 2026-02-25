@@ -1,0 +1,9 @@
+services:
+  jellyclean:
+    image: ghcr.io/incmve/jellyclean:latest
+    container_name: jellyclean
+    restart: unless-stopped
+    ports:
+      - "8099:80"
+    volumes:
+      - ./index.html:/www/index.html:ro

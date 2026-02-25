@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jellyfin Cleanup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --accent: #00e5a0;
+    --danger: #ff4757;
+    --warn: #ffa502;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: 
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 24px;
+    position: relative;
+    z-index: 1;
+  }
+
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 48px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2rem;
+    letter-spacing: -0.5px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .version {
+    font-size: 0.7rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  /* Panels */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  .panel-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 20px;
+  }
+
+  /* Form */
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .form-row.single { grid-template-columns: 1fr; }
+
+  label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    border-radius: 2px;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  input:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-primary:hover { background: #00c888; transform: translateY(-1px); }
+  .btn-primary:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+  .btn-danger {
+    background: var(--danger);
+    color: #fff;
+  }
+  .btn-danger:hover { background: #e0394a; }
+  .btn-danger:disabled { background: var(--muted); cursor: not-allowed; }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Status log */
+  .log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 16px;
+    height: 120px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+
+  .log-line { color: var(--muted); }
+  .log-line.ok { color: var(--accent); }
+  .log-line.err { color: var(--danger); }
+  .log-line.warn { color: var(--warn); }
+
+  /* Stats bar */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent);
+    display: block;
+  }
+
+  .stat-val.danger { color: var(--danger); }
+
+  .stat-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+  }
+
+  /* Movie list */
+  .movie-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .movie-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    transition: border-color 0.2s;
+  }
+
+  .movie-row.selected { border-color: var(--danger); background: rgba(255,71,87,0.05); }
+  .movie-row.selected-warn { border-color: var(--warn); background: rgba(255,165,2,0.05); }
+  .movie-row:hover { border-color: var(--muted); }
+
+  .movie-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+  }
+
+  .movie-meta {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .watched-pills {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: rgba(0,229,160,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(0,229,160,0.2);
+    white-space: nowrap;
+  }
+
+  .pill.unwatched {
+    background: rgba(90,90,122,0.2);
+    color: var(--muted);
+    border-color: var(--border);
+  }
+
+  .delete-check {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--danger);
+    cursor: pointer;
+  }
+
+  /* Controls row */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+
+  .controls-right { margin-left: auto; }
+
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tab {
+    padding: 6px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+  }
+
+  .tab.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 48px;
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .confirm-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .confirm-modal.open { display: flex; }
+
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--danger);
+    border-radius: 4px;
+    padding: 32px;
+    max-width: 400px;
+    width: 90%;
+  }
+
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--danger);
+    margin-bottom: 12px;
+  }
+
+  .modal-body {
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-bottom: 24px;
+  }
+
+  .modal-body strong { color: var(--text); }
+
+  .modal-actions { display: flex; gap: 12px; }
+
+  /* Schedule */
+  .schedule-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    border-radius: 2px;
+    outline: none;
+    transition: border-color 0.2s;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%235a5a7a' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    margin-bottom: 16px;
+  }
+
+  .toggle-label { flex: 1; font-size: 0.8rem; }
+  .toggle-sublabel { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+
+  .toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .toggle input { opacity: 0; width: 0; height: 0; }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    left: 3px;
+    top: 3px;
+    background: var(--muted);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+  }
+
+  .toggle input:checked + .toggle-slider { background: rgba(0,229,160,0.2); border: 1px solid var(--accent); }
+  .toggle input:checked + .toggle-slider::before { transform: translateX(20px); background: var(--accent); }
+
+  .schedule-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 2px;
+    font-size: 0.75rem;
+    margin-bottom: 16px;
+  }
+
+  .schedule-status.active {
+    background: rgba(0,229,160,0.05);
+    border: 1px solid rgba(0,229,160,0.2);
+    color: var(--accent);
+  }
+
+  .schedule-status.inactive {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .status-dot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
+  .status-dot.off { background: var(--muted); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .history-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 0.72rem;
+  }
+
+  .history-time { color: var(--muted); white-space: nowrap; min-width: 130px; }
+  .history-result { color: var(--accent); }
+  .history-result.none { color: var(--muted); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>JELLY<span>CLEAN</span></h1>
+    <span class="version">v1.0</span>
+  </header>
+
+  <!-- Connection Panel -->
+  <div class="panel" id="connectPanel">
+    <div class="panel-title">// Server Connection</div>
+    <div class="form-row">
+      <div>
+        <label>Jellyfin Server URL</label>
+        <input type="text" id="serverUrl" placeholder="http://192.168.1.100:8096" />
+      </div>
+      <div>
+        <label>Admin API Key</label>
+        <input type="password" id="apiKey" placeholder="Your API key" />
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="connect()">
+        <span id="connectSpinner" class="spinner" style="display:none"></span>
+        Connect
+      </button>
+      <button class="btn btn-ghost" onclick="showHelp()">How to get API key?</button>
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.75rem;color:var(--muted);text-transform:none;letter-spacing:0;cursor:pointer;margin-left:4px">
+        <input type="checkbox" id="rememberCreds" style="width:14px;height:14px;padding:0;accent-color:var(--accent)" onchange="onRememberChange()">
+        Remember credentials
+      </label>
+    </div>
+    <div class="log" id="log">
+      <div class="log-line">Waiting for connection...</div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats" id="statsRow" style="display:none">
+    <div class="stat">
+      <span class="stat-val" id="statMovies">0</span>
+      <div class="stat-label">Total Movies</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="statUsers">0</span>
+      <div class="stat-label">Users Tracked</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val danger" id="statEligible">0</span>
+      <div class="stat-label">All Watched</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val danger" id="statSize">0</span>
+      <div class="stat-label">Reclaimable (est.)</div>
+    </div>
+  </div>
+
+  <!-- Movie List Panel -->
+  <div class="panel" id="moviesPanel" style="display:none">
+    <div class="section-header">
+      <div class="panel-title" style="margin-bottom:0">// Movies</div>
+      <button class="btn btn-ghost" style="font-size:0.7rem" onclick="fetchMovies()">
+        <span id="refreshSpinner" class="spinner" style="display:none"></span>
+        Refresh
+      </button>
+    </div>
+
+    <div class="controls">
+      <div class="filter-tabs">
+        <button class="tab active" onclick="setFilter('all', this)">All</button>
+        <button class="tab" onclick="setFilter('eligible', this)">All Watched</button>
+        <button class="tab" onclick="setFilter('partial', this)">Partial</button>
+        <button class="tab" onclick="setFilter('none', this)">Unwatched</button>
+      </div>
+      <div class="controls-right" style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="selectEligible()" style="font-size:0.7rem">Select All Watched</button>
+        <button class="btn btn-ghost" onclick="clearSelection()" style="font-size:0.7rem">Clear</button>
+        <button class="btn btn-danger" onclick="openConfirm()" id="deleteBtn" disabled>Delete Selected (<span id="selectedCount">0</span>)</button>
+      </div>
+    </div>
+
+    <div class="movie-list" id="movieList">
+      <div class="empty">Connect to your server to load movies.</div>
+    </div>
+  </div>
+  <!-- Schedule Panel -->
+  <div class="panel" id="schedulePanel" style="display:none">
+    <div class="panel-title">// Auto-Cleanup Schedule</div>
+
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">Enable Scheduled Cleanup</div>
+        <div class="toggle-sublabel">Automatically delete movies all users have watched</div>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="scheduleEnabled" onchange="toggleSchedule()">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
+
+    <div class="schedule-grid">
+      <div>
+        <label>Frequency</label>
+        <select id="schedFreq" onchange="updateSchedulePreview()">
+          <option value="hourly">Every Hour</option>
+          <option value="daily" selected>Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div id="schedDayWrap">
+        <label>Day</label>
+        <select id="schedDay" onchange="updateSchedulePreview()">
+          <option value="0">Sunday</option>
+          <option value="1">Monday</option>
+          <option value="2">Tuesday</option>
+          <option value="3" selected>Wednesday</option>
+          <option value="4">Thursday</option>
+          <option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </div>
+      <div>
+        <label>Time</label>
+        <select id="schedTime" onchange="updateSchedulePreview()"></select>
+      </div>
+    </div>
+
+    <div class="schedule-status inactive" id="schedStatus">
+      <span class="status-dot off" id="schedDot"></span>
+      <span id="schedStatusText">Schedule is disabled.</span>
+    </div>
+
+    <div style="display:flex;gap:12px;margin-bottom:24px">
+      <button class="btn btn-ghost" onclick="runScheduledCleanup(true)" style="font-size:0.7rem">▶ Run Now (Dry Run)</button>
+      <button class="btn btn-danger" onclick="runScheduledCleanup(false)" style="font-size:0.7rem">▶ Run Now (Delete)</button>
+    </div>
+
+    <div class="panel-title" style="margin-bottom:12px">// Run History</div>
+    <div class="history-list" id="historyList">
+      <div class="empty" style="padding:16px">No runs recorded yet.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="confirm-modal" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-title">⚠ Confirm Deletion</div>
+    <div class="modal-body" id="confirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="deleteSelected()">Delete Files</button>
+      <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let serverUrl = '';
+let apiKey = '';
+let allMovies = [];
+let allUsers = [];
+let watchData = {}; // movieId -> Set of userIds who watched
+let selectedIds = new Set();
+let currentFilter = 'all';
+
+// ── Credential persistence ────────────────────────────────
+const CREDS_KEY = 'jellyclean_creds';
+
+function loadSavedCreds() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CREDS_KEY) || '{}');
+    if (c.url) document.getElementById('serverUrl').value = c.url;
+    if (c.key) document.getElementById('apiKey').value = c.key;
+    if (c.remember) document.getElementById('rememberCreds').checked = true;
+  } catch(e) {}
+}
+
+function onRememberChange() {
+  const remember = document.getElementById('rememberCreds').checked;
+  if (!remember) {
+    localStorage.removeItem(CREDS_KEY);
+  } else {
+    saveCreds();
+  }
+}
+
+function saveCreds() {
+  if (!document.getElementById('rememberCreds').checked) return;
+  localStorage.setItem(CREDS_KEY, JSON.stringify({
+    url: document.getElementById('serverUrl').value,
+    key: document.getElementById('apiKey').value,
+    remember: true
+  }));
+}
+
+document.addEventListener('DOMContentLoaded', loadSavedCreds);
+
+function log(msg, type='') {
+  const el = document.getElementById('log');
+  el.innerHTML += `<div class="log-line ${type}">${new Date().toLocaleTimeString()} &gt; ${msg}</div>`;
+  el.scrollTop = el.scrollHeight;
+}
+
+async function jellyFetch(path, opts={}) {
+  const res = await fetch(`${serverUrl}${path}`, {
+    ...opts,
+    headers: {
+      'X-Emby-Token': apiKey,
+      'Content-Type': 'application/json',
+      ...(opts.headers||{})
+    }
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function connect() {
+  serverUrl = document.getElementById('serverUrl').value.replace(/\/$/, '');
+  apiKey = document.getElementById('apiKey').value.trim();
+
+  if (!serverUrl || !apiKey) { log('Please enter server URL and API key.', 'err'); return; }
+
+  saveCreds();
+  const spinner = document.getElementById('connectSpinner');
+  spinner.style.display = 'inline-block';
+
+  try {
+    log('Connecting to server...');
+    const info = await jellyFetch('/System/Info');
+    log(`Connected to ${info.ServerName} (${info.Version})`, 'ok');
+
+    log('Fetching users...');
+    const users = await jellyFetch('/Users');
+    allUsers = users.filter(u => !u.Policy?.IsDisabled);
+    log(`Found ${allUsers.length} active users: ${allUsers.map(u=>u.Name).join(', ')}`, 'ok');
+
+    document.getElementById('statUsers').textContent = allUsers.length;
+    document.getElementById('statsRow').style.display = 'grid';
+    document.getElementById('moviesPanel').style.display = 'block';
+    showSchedulePanel();
+
+    await fetchMovies();
+  } catch(e) {
+    log(`Connection failed: ${e.message}`, 'err');
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+async function fetchMovies() {
+  const spinner = document.getElementById('refreshSpinner');
+  spinner.style.display = 'inline-block';
+  log('Fetching movies library...');
+
+  try {
+    // Get all movies
+    const moviesRes = await jellyFetch('/Items?IncludeItemTypes=Movie&Recursive=true&Fields=MediaSources,Path,RunTimeTicks&Limit=5000');
+    allMovies = moviesRes.Items || [];
+    log(`Found ${allMovies.length} movies.`, 'ok');
+
+    // Get watched status per user
+    watchData = {};
+    allMovies.forEach(m => watchData[m.Id] = new Set());
+
+    log('Checking watched status for each user...');
+    for (const user of allUsers) {
+      const watched = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+      (watched.Items || []).forEach(m => {
+        if (watchData[m.Id]) watchData[m.Id].add(user.Id);
+      });
+      log(`${user.Name}: ${watched.TotalRecordCount || (watched.Items||[]).length} movies watched`, 'ok');
+    }
+
+    updateStats();
+    renderMovies();
+  } catch(e) {
+    log(`Error fetching movies: ${e.message}`, 'err');
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function isEligible(m) {
+  if (!allUsers.length) return false;
+  return watchData[m.Id]?.size === allUsers.length;
+}
+
+function updateStats() {
+  const eligible = allMovies.filter(isEligible);
+  document.getElementById('statMovies').textContent = allMovies.length;
+  document.getElementById('statEligible').textContent = eligible.length;
+
+  // Estimate size
+  let bytes = 0;
+  eligible.forEach(m => {
+    const src = m.MediaSources?.[0];
+    if (src?.Size) bytes += src.Size;
+  });
+  document.getElementById('statSize').textContent = formatBytes(bytes);
+}
+
+function formatBytes(b) {
+  if (b === 0) return '—';
+  if (b > 1e12) return (b/1e12).toFixed(1) + ' TB';
+  if (b > 1e9) return (b/1e9).toFixed(1) + ' GB';
+  return (b/1e6).toFixed(0) + ' MB';
+}
+
+function setFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderMovies();
+}
+
+function getFilteredMovies() {
+  switch(currentFilter) {
+    case 'eligible': return allMovies.filter(isEligible);
+    case 'partial': return allMovies.filter(m => {
+      const c = watchData[m.Id]?.size || 0;
+      return c > 0 && c < allUsers.length;
+    });
+    case 'none': return allMovies.filter(m => (watchData[m.Id]?.size || 0) === 0);
+    default: return allMovies;
+  }
+}
+
+function renderMovies() {
+  const list = document.getElementById('movieList');
+  const movies = getFilteredMovies();
+
+  if (!movies.length) {
+    list.innerHTML = '<div class="empty">No movies match this filter.</div>';
+    return;
+  }
+
+  list.innerHTML = movies.map(m => {
+    const watched = watchData[m.Id] || new Set();
+    const elig = watched.size === allUsers.length && allUsers.length > 0;
+    const sel = selectedIds.has(m.Id);
+    const year = m.ProductionYear ? ` · ${m.ProductionYear}` : '';
+    const size = m.MediaSources?.[0]?.Size ? ` · ${formatBytes(m.MediaSources[0].Size)}` : '';
+
+    const pills = allUsers.map(u =>
+      `<span class="pill ${watched.has(u.Id)?'':'unwatched'}">${u.Name}</span>`
+    ).join('');
+
+    return `
+      <div class="movie-row ${sel ? (elig ? 'selected' : 'selected-warn') : ''}" id="row-${m.Id}">
+        <div>
+          <div class="movie-title">${m.Name}</div>
+          <div class="movie-meta">${year}${size}</div>
+        </div>
+        <div class="watched-pills">${pills}</div>
+        <input type="checkbox" class="delete-check" ${sel?'checked':''}
+          onchange="toggleSelect('${m.Id}', this.checked)"
+          title="${elig?'All users watched':'Not all users have watched this — select anyway to force delete'}" />
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id);
+  else selectedIds.delete(id);
+  const row = document.getElementById(`row-${id}`);
+  if (row) {
+    const movie = allMovies.find(m => m.Id === id);
+    const elig = isEligible(movie);
+    row.classList.remove('selected', 'selected-warn');
+    if (checked) row.classList.add(elig ? 'selected' : 'selected-warn');
+  }
+  updateDeleteBtn();
+}
+
+function updateDeleteBtn() {
+  const btn = document.getElementById('deleteBtn');
+  const count = selectedIds.size;
+  document.getElementById('selectedCount').textContent = count;
+  btn.disabled = count === 0;
+}
+
+function selectEligible() {
+  allMovies.filter(isEligible).forEach(m => selectedIds.add(m.Id));
+  renderMovies();
+  updateDeleteBtn();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  renderMovies();
+  updateDeleteBtn();
+}
+
+function openConfirm() {
+  const count = selectedIds.size;
+  if (!count) return;
+
+  const movies = allMovies.filter(m => selectedIds.has(m.Id));
+  let bytes = 0;
+  movies.forEach(m => { if (m.MediaSources?.[0]?.Size) bytes += m.MediaSources[0].Size; });
+
+  document.getElementById('confirmBody').innerHTML = `
+    You are about to permanently delete <strong>${count} movie${count>1?'s':''}</strong> from your Jellyfin server.<br><br>
+    Estimated space to reclaim: <strong>${formatBytes(bytes)}</strong><br><br>
+    <strong>This action cannot be undone.</strong> Files will be removed from disk via the Jellyfin API.
+  `;
+  document.getElementById('confirmModal').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirmModal').classList.remove('open');
+}
+
+async function deleteSelected() {
+  closeConfirm();
+  const toDelete = [...selectedIds];
+  log(`Starting deletion of ${toDelete.length} movies...`, 'warn');
+
+  let success = 0, failed = 0;
+  for (const id of toDelete) {
+    const movie = allMovies.find(m => m.Id === id);
+    try {
+      await jellyFetch(`/Items/${id}`, { method: 'DELETE' });
+      log(`Deleted: ${movie?.Name}`, 'ok');
+      success++;
+    } catch(e) {
+      log(`Failed to delete ${movie?.Name}: ${e.message}`, 'err');
+      failed++;
+    }
+  }
+
+  log(`Done. ${success} deleted, ${failed} failed.`, success > 0 ? 'ok' : 'err');
+  selectedIds.clear();
+
+  // Refresh
+  await fetchMovies();
+}
+
+
+// ── Schedule ──────────────────────────────────────────────
+let scheduleTimer = null;
+const HISTORY_KEY = 'jellyclean_history';
+const SCHEDULE_KEY = 'jellyclean_schedule';
+
+function showSchedulePanel() {
+  document.getElementById('schedulePanel').style.display = 'block';
+
+  // Populate time options
+  const timeEl = document.getElementById('schedTime');
+  if (!timeEl.options.length) {
+    for (let i = 0; i < 24; i++) {
+      const h = i%12||12, ampm = i<12?'AM':'PM';
+      const opt = new Option(`${h}:00 ${ampm}`, i, i===3, i===3);
+      timeEl.add(opt);
+    }
+  }
+
+  loadScheduleSettings();
+  renderHistory();
+  updateSchedulePreview();
+  updateFreqUI();
+}
+
+function loadScheduleSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SCHEDULE_KEY) || '{}');
+    if (s.enabled) document.getElementById('scheduleEnabled').checked = true;
+    if (s.freq) document.getElementById('schedFreq').value = s.freq;
+    if (s.day !== undefined) document.getElementById('schedDay').value = s.day;
+    if (s.time !== undefined) document.getElementById('schedTime').value = s.time;
+    if (s.enabled) activateSchedule();
+  } catch(e) {}
+}
+
+function saveScheduleSettings() {
+  const s = {
+    enabled: document.getElementById('scheduleEnabled').checked,
+    freq: document.getElementById('schedFreq').value,
+    day: document.getElementById('schedDay').value,
+    time: document.getElementById('schedTime').value
+  };
+  localStorage.setItem(SCHEDULE_KEY, JSON.stringify(s));
+}
+
+function updateFreqUI() {
+  const freq = document.getElementById('schedFreq').value;
+  document.getElementById('schedDayWrap').style.display = freq === 'weekly' ? '' : 'none';
+}
+
+function updateSchedulePreview() {
+  updateFreqUI();
+  saveScheduleSettings();
+  const enabled = document.getElementById('scheduleEnabled').checked;
+  const freq = document.getElementById('schedFreq').value;
+  const day = parseInt(document.getElementById('schedDay').value);
+  const time = parseInt(document.getElementById('schedTime').value);
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const h = time%12||12, ampm = time<12?'AM':'PM';
+  const timeStr = `${h}:00 ${ampm}`;
+
+  let desc = '';
+  if (freq === 'hourly') desc = 'every hour';
+  else if (freq === 'daily') desc = `daily at ${timeStr}`;
+  else if (freq === 'weekly') desc = `every ${days[day]} at ${timeStr}`;
+  else if (freq === 'monthly') desc = `monthly on the 1st at ${timeStr}`;
+
+  const statusEl = document.getElementById('schedStatus');
+  const dot = document.getElementById('schedDot');
+  const txt = document.getElementById('schedStatusText');
+
+  if (enabled) {
+    statusEl.className = 'schedule-status active';
+    dot.className = 'status-dot on';
+    const next = getNextRun();
+    txt.textContent = `Active · Runs ${desc} · Next: ${next.toLocaleString()}`;
+  } else {
+    statusEl.className = 'schedule-status inactive';
+    dot.className = 'status-dot off';
+    txt.textContent = `Schedule disabled · Would run ${desc}`;
+  }
+}
+
+function getNextRun() {
+  const freq = document.getElementById('schedFreq').value;
+  const day = parseInt(document.getElementById('schedDay').value);
+  const time = parseInt(document.getElementById('schedTime').value);
+  const now = new Date();
+  const next = new Date(now);
+
+  if (freq === 'hourly') {
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+  } else if (freq === 'daily') {
+    next.setHours(time, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+  } else if (freq === 'weekly') {
+    next.setHours(time, 0, 0, 0);
+    const diff = (day - now.getDay() + 7) % 7 || (next <= now ? 7 : 0);
+    next.setDate(next.getDate() + diff);
+  } else if (freq === 'monthly') {
+    next.setDate(1);
+    next.setHours(time, 0, 0, 0);
+    if (next <= now) { next.setMonth(next.getMonth() + 1); next.setDate(1); }
+  }
+  return next;
+}
+
+function getMsUntilNext() {
+  return getNextRun() - Date.now();
+}
+
+function toggleSchedule() {
+  saveScheduleSettings();
+  const enabled = document.getElementById('scheduleEnabled').checked;
+  if (enabled) activateSchedule();
+  else deactivateSchedule();
+  updateSchedulePreview();
+}
+
+function activateSchedule() {
+  if (scheduleTimer) clearTimeout(scheduleTimer);
+  const ms = getMsUntilNext();
+  log(`Schedule armed — next run in ${formatDuration(ms)}`, 'ok');
+  scheduleTimer = setTimeout(scheduledTick, ms);
+}
+
+function deactivateSchedule() {
+  if (scheduleTimer) { clearTimeout(scheduleTimer); scheduleTimer = null; }
+  log('Schedule disabled.', 'warn');
+}
+
+async function scheduledTick() {
+  log('⏰ Scheduled cleanup triggered!', 'warn');
+  await runScheduledCleanup(false, true);
+  // Re-arm
+  const ms = getMsUntilNext();
+  scheduleTimer = setTimeout(scheduledTick, ms);
+  updateSchedulePreview();
+}
+
+function formatDuration(ms) {
+  const h = Math.floor(ms/3600000);
+  const m = Math.floor((ms%3600000)/60000);
+  if (h > 24) return `${Math.floor(h/24)}d ${h%24}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+async function runScheduledCleanup(dryRun=true, fromSchedule=false) {
+  if (!serverUrl || !apiKey) {
+    log('Not connected — schedule run skipped.', 'err');
+    return;
+  }
+
+  log(`${dryRun ? '[DRY RUN]' : '[LIVE]'} Running scheduled cleanup...`, 'warn');
+
+  // Refresh data first
+  await fetchMovies();
+
+  const eligible = allMovies.filter(isEligible);
+  const runTime = new Date();
+
+  if (!eligible.length) {
+    log('Scheduled run: no eligible movies found.', 'ok');
+    addHistory({ time: runTime, deleted: 0, dryRun, names: [] });
+    return;
+  }
+
+  log(`Found ${eligible.length} movie(s) all users have watched.`, 'ok');
+  let deleted = 0;
+  const names = [];
+
+  if (!dryRun) {
+    for (const m of eligible) {
+      try {
+        await jellyFetch(`/Items/${m.Id}`, { method: 'DELETE' });
+        log(`Deleted: ${m.Name}`, 'ok');
+        names.push(m.Name);
+        deleted++;
+      } catch(e) {
+        log(`Failed: ${m.Name} — ${e.message}`, 'err');
+      }
+    }
+    await fetchMovies();
+  } else {
+    eligible.forEach(m => { log(`[DRY RUN] Would delete: ${m.Name}`, 'warn'); names.push(m.Name); });
+    deleted = eligible.length;
+  }
+
+  addHistory({ time: runTime, deleted, dryRun, names });
+}
+
+function addHistory(entry) {
+  try {
+    const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    hist.unshift({ ...entry, time: entry.time.toISOString(), names: entry.names });
+    if (hist.length > 50) hist.pop();
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(hist));
+    renderHistory();
+  } catch(e) {}
+}
+
+function renderHistory() {
+  const el = document.getElementById('historyList');
+  if (!el) return;
+  try {
+    const hist = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+    if (!hist.length) {
+      el.innerHTML = '<div class="empty" style="padding:16px">No runs recorded yet.</div>';
+      return;
+    }
+    el.innerHTML = hist.map(h => {
+      const t = new Date(h.time).toLocaleString();
+      const label = h.dryRun ? '[DRY RUN]' : '[LIVE]';
+      const result = h.deleted > 0
+        ? `${label} ${h.deleted} movie${h.deleted>1?'s':''} ${h.dryRun?'would be deleted':'deleted'}`
+        : `${label} Nothing to delete`;
+      const cls = h.deleted > 0 ? '' : 'none';
+      return `
+        <div class="history-row">
+          <span class="history-time">${t}</span>
+          <span class="history-result ${cls}">${result}</span>
+          ${h.names?.length ? `<span style="color:var(--muted);font-size:0.65rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.names.join(', ')}</span>` : ''}
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div class="empty" style="padding:16px">Could not load history.</div>';
+  }
+}
+
+function showHelp() {
+  alert(
+    'How to get your Jellyfin API key:\n\n' +
+    '1. Log in to Jellyfin as an admin\n' +
+    '2. Go to Dashboard → API Keys\n' +
+    '3. Click "+" to create a new key\n' +
+    '4. Name it (e.g. "JellyClean") and save\n' +
+    '5. Copy the key and paste it here\n\n' +
+    'Note: The admin account is used to read watch history\n' +
+    'for ALL users and to delete files from disk.'
+  );
+}
+</script>
+</body>
+</html>
