@@ -5,3 +5,10 @@ services:
     restart: unless-stopped
     ports:
       - "8099:80"
+    environment:
+      - TZ=Europe/Amsterdam
+    volumes:
+      - jellyclean-data:/data
+
+volumes:
+  jellyclean-data:

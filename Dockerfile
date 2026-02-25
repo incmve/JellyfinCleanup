@@ -1,7 +1,14 @@
-FROM busybox:latest
+FROM python:3.13-alpine
 
-COPY index.html /www/index.html
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY server.py .
+COPY index.html .
 
 EXPOSE 80
 
-CMD ["httpd", "-f", "-p", "80", "-h", "/www"]
+CMD ["python", "server.py"]
+
