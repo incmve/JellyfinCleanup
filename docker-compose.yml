@@ -1,6 +1,6 @@
 services:
   jellyclean:
-    image: ghcr.io/incmve/jellyclean:latest
+    image: incmve/jellyclean:latest
     container_name: jellyclean
     restart: unless-stopped
     ports:
