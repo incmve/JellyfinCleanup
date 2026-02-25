@@ -76,9 +76,9 @@ def run_cleanup(dry_run=False):
         watch_data = {m['Id']: set() for m in movies}
         for user in users:
             watched_resp = requests.get(
-                f'{server_url}/Users/{user["Id"]}/Items',
+                f'{server_url}/Items',
                 headers=headers,
-                params={'IncludeItemTypes': 'Movie', 'Recursive': 'true', 'IsPlayed': 'true', 'Fields': 'Id', 'Limit': 5000},
+                params={'userId': user['Id'], 'IncludeItemTypes': 'Movie', 'Recursive': 'true', 'IsPlayed': 'true', 'Fields': 'Id', 'Limit': 5000},
                 timeout=30
             )
             watched_resp.raise_for_status()

@@ -790,7 +790,7 @@ async function fetchMovies() {
 
     log('Checking watched status for each user...');
     for (const user of allUsers) {
-      const watched = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+      const watched = await jellyFetch(`/Items?userId=${user.Id}&IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
       (watched.Items || []).forEach(m => {
         if (watchData[m.Id]) watchData[m.Id].add(user.Id);
       });
