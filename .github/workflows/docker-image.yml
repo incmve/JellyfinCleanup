@@ -3,9 +3,15 @@ name: Docker Image CI
 on:
   push:
     branches: [ "main", "beta" ]
+    paths-ignore:
+      - "README.md"
+      - "jellyclean.png"
   pull_request:
     branches: [ "main", "beta" ]
-
+    paths-ignore:
+      - "README.md"
+      - "jellyclean.png"
+      
 jobs:
   build:
     runs-on: ubuntu-latest
