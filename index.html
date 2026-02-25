@@ -731,6 +731,7 @@ async function jellyFetch(path, opts={}) {
     ...opts,
     headers: {
       'X-Emby-Token': apiKey,
+      'X-MediaBrowser-Token': apiKey,
       'Content-Type': 'application/json',
       ...(opts.headers||{})
     }
@@ -791,7 +792,13 @@ async function fetchMovies() {
     log('Checking watched status for each user...');
     for (const user of allUsers) {
       try {
-        const watched = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+        // Try new endpoint format first (10.9+), fall back to legacy
+        let watched;
+        try {
+          watched = await jellyFetch(`/Items?userId=${user.Id}&IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+        } catch(e) {
+          watched = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Movie&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+        }
         (watched.Items || []).forEach(m => {
           if (watchData[m.Id]) watchData[m.Id].add(user.Id);
         });
