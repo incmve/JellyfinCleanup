@@ -42,7 +42,7 @@
   }
 
   .container {
-    max-width: 900px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 40px 24px;
     position: relative;
@@ -585,7 +585,9 @@
   .history-result { color: var(--accent); }
   .history-result.none { color: var(--muted); }
 
-  /* Scrollbar */
+  @media (max-width: 900px) {
+    .side-by-side { grid-template-columns: 1fr !important; }
+  }
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 3px; }
@@ -664,6 +666,9 @@
     </div>
   </div>
 
+  <!-- Movies + Shows side by side -->
+  <div class="side-by-side" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
   <!-- Movie List Panel -->
   <div class="panel" id="moviesPanel" style="display:none">
     <div class="section-header">
@@ -721,6 +726,7 @@
       <div class="empty">Connect to your server to load shows.</div>
     </div>
   </div>
+  </div><!-- end side-by-side -->
   <!-- Schedule Panel -->
   <div class="panel" id="schedulePanel" style="display:none">
     <div class="panel-title">// Auto-Cleanup Schedule</div>
