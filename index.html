@@ -697,7 +697,6 @@
       <div class="empty">Connect to your server to load movies.</div>
     </div>
   </div>
-  </div>
   <!-- Shows Panel -->
   <div class="panel" id="showsPanel" style="display:none">
     <div class="section-header">
@@ -1269,7 +1268,7 @@ async function fetchShows() {
     log(`Found ${series.length} shows. Loading seasons...`, 'ok');
 
     // Get all seasons in one call
-    const allSeasonsRes = await jellyFetch('/Items?IncludeItemTypes=Season&Recursive=true&Fields=MediaSources&Limit=5000');
+    const allSeasonsRes = await jellyFetch('/Items?IncludeItemTypes=Season&Recursive=true&Fields=MediaSources,ChildCount&Limit=5000');
     const allSeasons = (allSeasonsRes.Items || []).filter(s => s.Name !== 'Specials');
 
     // Get all watched seasons per user in one call each
@@ -1280,8 +1279,14 @@ async function fetchShows() {
         watchedByUser[user.Id] = new Set((wRes.Items || []).map(s => s.Id));
         log(`${user.Name}: ${watchedByUser[user.Id].size} seasons watched`, 'ok');
       } catch(e) {
-        watchedByUser[user.Id] = new Set();
-        log(`${user.Name}: failed to fetch watched seasons (${e.message})`, 'err');
+        // fallback to legacy endpoint
+        try {
+          const wRes = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Season&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+          watchedByUser[user.Id] = new Set((wRes.Items || []).map(s => s.Id));
+        } catch(e2) {
+          watchedByUser[user.Id] = new Set();
+          log(`${user.Name}: failed to fetch watched seasons`, 'err');
+        }
       }
     }
 
