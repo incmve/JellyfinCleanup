@@ -1279,14 +1279,8 @@ async function fetchShows() {
         watchedByUser[user.Id] = new Set((wRes.Items || []).map(s => s.Id));
         log(`${user.Name}: ${watchedByUser[user.Id].size} seasons watched`, 'ok');
       } catch(e) {
-        // fallback to legacy endpoint
-        try {
-          const wRes = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Season&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
-          watchedByUser[user.Id] = new Set((wRes.Items || []).map(s => s.Id));
-        } catch(e2) {
-          watchedByUser[user.Id] = new Set();
-          log(`${user.Name}: failed to fetch watched seasons`, 'err');
-        }
+        watchedByUser[user.Id] = new Set();
+        log(`${user.Name}: failed to fetch watched seasons (${e.message})`, 'err');
       }
     }
 
