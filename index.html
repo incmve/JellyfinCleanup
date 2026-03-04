@@ -901,8 +901,8 @@ async function connect() {
     document.getElementById('showsPanel').style.display = 'block';
     showSchedulePanel();
 
-    await fetchMovies();
-    await fetchShows();
+    // Load both in parallel
+    await Promise.all([fetchMovies(), fetchShows()]);
   } catch(e) {
     log(`Connection failed: ${e.message}`, 'err');
   } finally {
@@ -1268,43 +1268,48 @@ async function fetchShows() {
     const series = res.Items || [];
     log(`Found ${series.length} shows. Loading seasons...`, 'ok');
 
-    allShows = [];
+    // Get all seasons in one call
+    const allSeasonsRes = await jellyFetch('/Items?IncludeItemTypes=Season&Recursive=true&Fields=MediaSources&Limit=5000');
+    const allSeasons = (allSeasonsRes.Items || []).filter(s => s.Name !== 'Specials');
 
-    for (const show of series) {
-      const showData = { id: show.Id, name: show.Name, year: show.ProductionYear, seasons: [] };
-
-      // Get seasons with size info
-      const seasonsRes = await jellyFetch(`/Shows/${show.Id}/Seasons?Fields=MediaSources`);
-      const seasons = (seasonsRes.Items || []).filter(s => s.Name !== 'Specials');
-
-      for (const season of seasons) {
-        // watchedBy: set of userIds who have fully watched this season
-        const watchedBy = new Set();
-
-        for (const user of allUsers) {
-          try {
-            // Fetch the season item with UserData for this specific user
-            const detail = await jellyFetch(`/Users/${user.Id}/Items/${season.Id}`);
-            if (detail?.UserData?.Played) {
-              watchedBy.add(user.Id);
-            }
-          } catch(e) {}
-        }
-
-        const size = season.MediaSources?.[0]?.Size || 0;
-
-        showData.seasons.push({
-          id:           season.Id,
-          name:         season.Name,
-          episodeCount: season.ChildCount || 0,
-          watchedBy,
-          size
-        });
+    // Get all watched seasons per user in one call each
+    const watchedByUser = {}; // userId -> Set of seasonIds
+    for (const user of allUsers) {
+      try {
+        const wRes = await jellyFetch(`/Users/${user.Id}/Items?IncludeItemTypes=Season&Recursive=true&IsPlayed=true&Fields=Id&Limit=5000`);
+        watchedByUser[user.Id] = new Set((wRes.Items || []).map(s => s.Id));
+        log(`${user.Name}: ${watchedByUser[user.Id].size} seasons watched`, 'ok');
+      } catch(e) {
+        watchedByUser[user.Id] = new Set();
+        log(`${user.Name}: failed to fetch watched seasons (${e.message})`, 'err');
       }
-
-      allShows.push(showData);
     }
 
+    // Group seasons by show
+    const showMap = {};
+    for (const show of series) {
+      showMap[show.Id] = { id: show.Id, name: show.Name, year: show.ProductionYear, seasons: [] };
+    }
+
+    for (const season of allSeasons) {
+      const show = showMap[season.SeriesId];
+      if (!show) continue;
+
+      const watchedBy = new Set();
+      for (const user of allUsers) {
+        if (watchedByUser[user.Id]?.has(season.Id)) watchedBy.add(user.Id);
+      }
+
+      show.seasons.push({
+        id:           season.Id,
+        name:         season.Name,
+        episodeCount: season.ChildCount || 0,
+        watchedBy,
+        size:         season.MediaSources?.[0]?.Size || 0
+      });
+    }
+
+    allShows = Object.values(showMap).filter(s => s.seasons.length > 0);
     log(`Loaded ${allShows.length} shows.`, 'ok');
     updateShowStats();
     renderShows();
