@@ -186,7 +186,7 @@
   /* Stats bar */
   .stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 16px;
     margin-bottom: 24px;
   }
@@ -372,7 +372,85 @@
 
   .modal-actions { display: flex; gap: 12px; }
 
-  /* Schedule */
+  /* Shows */
+  .show-row {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    transition: border-color 0.2s;
+    overflow: hidden;
+  }
+
+  .show-row.selected { border-color: var(--danger); background: rgba(255,71,87,0.03); }
+  .show-row.selected-warn { border-color: var(--warn); background: rgba(255,165,2,0.03); }
+
+  .show-header {
+    display: grid;
+    grid-template-columns: 24px 1fr auto auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .show-header:hover { background: rgba(255,255,255,0.02); }
+
+  .show-chevron {
+    color: var(--muted);
+    font-size: 0.7rem;
+    transition: transform 0.2s;
+    text-align: center;
+  }
+
+  .show-row.expanded .show-chevron { transform: rotate(90deg); }
+
+  .show-seasons {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 8px 16px 8px 52px;
+    background: rgba(0,0,0,0.2);
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .show-row.expanded .show-seasons { display: flex; }
+
+  .season-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+
+  .season-row.sel-season { border-color: var(--danger); background: rgba(255,71,87,0.05); }
+  .season-row.sel-season-warn { border-color: var(--warn); background: rgba(255,165,2,0.05); }
+
+  .season-title { font-size: 0.8rem; font-weight: 700; }
+  .season-meta  { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
+
+  .progress-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 5px;
+    overflow: hidden;
+    width: 100%;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width 0.3s;
+  }
+
+  .progress-fill.partial { background: var(--warn); }
+  .progress-fill.full    { background: var(--accent); }
   .schedule-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -562,19 +640,27 @@
   <div class="stats" id="statsRow" style="display:none">
     <div class="stat">
       <span class="stat-val" id="statMovies">0</span>
-      <div class="stat-label">Total Movies</div>
+      <div class="stat-label">Movies</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="statShows">0</span>
+      <div class="stat-label">Shows</div>
     </div>
     <div class="stat">
       <span class="stat-val" id="statUsers">0</span>
-      <div class="stat-label">Users Tracked</div>
+      <div class="stat-label">Users</div>
     </div>
     <div class="stat">
       <span class="stat-val danger" id="statEligible">0</span>
-      <div class="stat-label">All Watched</div>
+      <div class="stat-label">Movies Ready</div>
+    </div>
+    <div class="stat">
+      <span class="stat-val danger" id="statEligibleSeasons">0</span>
+      <div class="stat-label">Seasons Ready</div>
     </div>
     <div class="stat">
       <span class="stat-val danger" id="statSize">0</span>
-      <div class="stat-label">Reclaimable (est.)</div>
+      <div class="stat-label">Reclaimable</div>
     </div>
   </div>
 
@@ -604,6 +690,35 @@
 
     <div class="movie-list" id="movieList">
       <div class="empty">Connect to your server to load movies.</div>
+    </div>
+  </div>
+  </div>
+  <!-- Shows Panel -->
+  <div class="panel" id="showsPanel" style="display:none">
+    <div class="section-header">
+      <div class="panel-title" style="margin-bottom:0">// TV Shows</div>
+      <button class="btn btn-ghost" style="font-size:0.7rem" onclick="fetchShows()">
+        <span id="showsRefreshSpinner" class="spinner" style="display:none"></span>
+        Refresh
+      </button>
+    </div>
+
+    <div class="controls">
+      <div class="filter-tabs">
+        <button class="tab active" onclick="setShowFilter('all', this)">All</button>
+        <button class="tab" onclick="setShowFilter('eligible', this)">All Watched</button>
+        <button class="tab" onclick="setShowFilter('partial', this)">Partial</button>
+        <button class="tab" onclick="setShowFilter('none', this)">Unwatched</button>
+      </div>
+      <div class="controls-right" style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="selectEligibleSeasons()" style="font-size:0.7rem">Select All Watched</button>
+        <button class="btn btn-ghost" onclick="clearShowSelection()" style="font-size:0.7rem">Clear</button>
+        <button class="btn btn-danger" onclick="openShowConfirm()" id="showDeleteBtn" disabled>Delete Selected (<span id="showSelectedCount">0</span>)</button>
+      </div>
+    </div>
+
+    <div class="movie-list" id="showList">
+      <div class="empty">Connect to your server to load shows.</div>
     </div>
   </div>
   <!-- Schedule Panel -->
@@ -675,6 +790,18 @@
     <div class="modal-actions">
       <button class="btn btn-danger" onclick="deleteSelected()">Delete Files</button>
       <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shows Confirm Modal -->
+<div class="confirm-modal" id="showConfirmModal">
+  <div class="modal-box">
+    <div class="modal-title">⚠ Confirm Deletion</div>
+    <div class="modal-body" id="showConfirmBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="deleteSelectedSeasons()">Delete Seasons</button>
+      <button class="btn btn-ghost" onclick="closeShowConfirm()">Cancel</button>
     </div>
   </div>
 </div>
@@ -765,9 +892,11 @@ async function connect() {
     document.getElementById('statUsers').textContent = allUsers.length;
     document.getElementById('statsRow').style.display = 'grid';
     document.getElementById('moviesPanel').style.display = 'block';
+    document.getElementById('showsPanel').style.display = 'block';
     showSchedulePanel();
 
     await fetchMovies();
+    await fetchShows();
   } catch(e) {
     log(`Connection failed: ${e.message}`, 'err');
   } finally {
@@ -1114,6 +1243,246 @@ function renderHistoryData(hist) {
       </div>
     `;
   }).join('');
+}
+
+// ── Shows ─────────────────────────────────────────────────
+// Strategy: fetch seasons for each show, check UserData.Played per user per season
+// No episode-level fetching needed.
+let allShows = [];
+let selectedSeasonIds = new Set();
+let currentShowFilter = 'all';
+
+async function fetchShows() {
+  const spinner = document.getElementById('showsRefreshSpinner');
+  spinner.style.display = 'inline-block';
+  log('Fetching TV shows...');
+
+  try {
+    const res = await jellyFetch('/Items?IncludeItemTypes=Series&Recursive=true&Fields=MediaSources&Limit=500');
+    const series = res.Items || [];
+    log(`Found ${series.length} shows. Loading seasons...`, 'ok');
+
+    allShows = [];
+
+    for (const show of series) {
+      const showData = { id: show.Id, name: show.Name, year: show.ProductionYear, seasons: [] };
+
+      // Get seasons with size info
+      const seasonsRes = await jellyFetch(`/Shows/${show.Id}/Seasons?Fields=MediaSources`);
+      const seasons = (seasonsRes.Items || []).filter(s => s.Name !== 'Specials');
+
+      for (const season of seasons) {
+        // watchedBy: set of userIds who have fully watched this season
+        const watchedBy = new Set();
+
+        for (const user of allUsers) {
+          try {
+            // Fetch the season item with UserData for this specific user
+            const detail = await jellyFetch(`/Users/${user.Id}/Items/${season.Id}`);
+            if (detail?.UserData?.Played) {
+              watchedBy.add(user.Id);
+            }
+          } catch(e) {}
+        }
+
+        const size = season.MediaSources?.[0]?.Size || 0;
+
+        showData.seasons.push({
+          id:           season.Id,
+          name:         season.Name,
+          episodeCount: season.ChildCount || 0,
+          watchedBy,
+          size
+        });
+      }
+
+      allShows.push(showData);
+    }
+
+    log(`Loaded ${allShows.length} shows.`, 'ok');
+    updateShowStats();
+    renderShows();
+  } catch(e) {
+    log(`Error fetching shows: ${e.message}`, 'err');
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function isSeasonEligible(season) {
+  return allUsers.length > 0 && season.watchedBy.size === allUsers.length;
+}
+
+function isShowEligible(show) {
+  return show.seasons.length > 0 && show.seasons.every(s => isSeasonEligible(s));
+}
+
+function getSeasonWatchPct(season) {
+  if (!allUsers.length) return 0;
+  return season.watchedBy.size / allUsers.length;
+}
+
+function updateShowStats() {
+  const eligibleSeasons = allShows.flatMap(s => s.seasons).filter(isSeasonEligible);
+  document.getElementById('statShows').textContent = allShows.length;
+  document.getElementById('statEligibleSeasons').textContent = eligibleSeasons.length;
+}
+
+function setShowFilter(filter, el) {
+  currentShowFilter = filter;
+  document.querySelectorAll('#showsPanel .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderShows();
+}
+
+function getFilteredShows() {
+  switch(currentShowFilter) {
+    case 'eligible': return allShows.filter(isShowEligible);
+    case 'partial':  return allShows.filter(s => !isShowEligible(s) && s.seasons.some(season => getSeasonWatchPct(season) > 0));
+    case 'none':     return allShows.filter(s => s.seasons.every(season => getSeasonWatchPct(season) === 0));
+    default: return allShows;
+  }
+}
+
+function renderShows() {
+  const list = document.getElementById('showList');
+  const shows = getFilteredShows();
+
+  if (!shows.length) {
+    list.innerHTML = '<div class="empty">No shows match this filter.</div>';
+    return;
+  }
+
+  list.innerHTML = shows.map(show => {
+    const allElig = isShowEligible(show);
+    const anySel  = show.seasons.some(s => selectedSeasonIds.has(s.id));
+    const cls     = anySel ? (allElig ? 'selected' : 'selected-warn') : '';
+    const showPct = show.seasons.length
+      ? show.seasons.reduce((a, s) => a + getSeasonWatchPct(s), 0) / show.seasons.length
+      : 0;
+
+    const seasonsHtml = show.seasons.map(season => {
+      const elig      = isSeasonEligible(season);
+      const sel       = selectedSeasonIds.has(season.id);
+      const pct       = getSeasonWatchPct(season);
+      const pctPx     = Math.round(pct * 100);
+      const fillCls   = pct >= 1 ? 'full' : pct > 0 ? 'partial' : '';
+      const seasonCls = sel ? (elig ? 'sel-season' : 'sel-season-warn') : '';
+
+      const pills = allUsers.map(u => {
+        const watched = season.watchedBy.has(u.Id);
+        return `<span class="pill ${watched ? '' : 'unwatched'}">${u.Name}</span>`;
+      }).join('');
+
+      return `
+        <div class="season-row ${seasonCls}" id="srow-${season.id}">
+          <div style="flex:1">
+            <div class="season-title">${season.name}</div>
+            <div class="season-meta">${season.episodeCount} episodes · ${formatBytes(season.size)}</div>
+            <div class="progress-bar"><div class="progress-fill ${fillCls}" style="width:${pctPx}%"></div></div>
+            <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">${pills}</div>
+          </div>
+          <input type="checkbox" class="delete-check" ${sel ? 'checked' : ''}
+            onchange="toggleSeasonSelect('${season.id}', this.checked)"
+            title="${elig ? 'All users watched this season' : 'Not watched by all users'}" />
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="show-row ${cls}" id="show-${show.id}">
+        <div class="show-header" onclick="toggleShowExpand('${show.id}')">
+          <span class="show-chevron">▶</span>
+          <div>
+            <div class="movie-title">${show.name}${show.year ? ` (${show.year})` : ''}</div>
+            <div class="movie-meta">${show.seasons.length} season${show.seasons.length !== 1 ? 's' : ''} · ${Math.round(showPct * 100)}% watched</div>
+          </div>
+          <div class="watched-pills">
+            ${show.seasons.map(s => `<span class="pill ${isSeasonEligible(s) ? '' : 'unwatched'}">${s.name}</span>`).join('')}
+          </div>
+          <input type="checkbox" class="delete-check" ${anySel ? 'checked' : ''}
+            onclick="event.stopPropagation(); toggleShowSelect('${show.id}', this.checked)"
+            title="Select all seasons" />
+        </div>
+        <div class="show-seasons">${seasonsHtml}</div>
+      </div>`;
+  }).join('');
+}
+
+function toggleShowExpand(showId) {
+  document.getElementById(`show-${showId}`)?.classList.toggle('expanded');
+}
+
+function toggleSeasonSelect(seasonId, checked) {
+  if (checked) selectedSeasonIds.add(seasonId);
+  else selectedSeasonIds.delete(seasonId);
+  updateShowDeleteBtn();
+  renderShows();
+}
+
+function toggleShowSelect(showId, checked) {
+  const show = allShows.find(s => s.id === showId);
+  if (!show) return;
+  show.seasons.forEach(s => {
+    if (checked) selectedSeasonIds.add(s.id);
+    else selectedSeasonIds.delete(s.id);
+  });
+  updateShowDeleteBtn();
+  renderShows();
+}
+
+function updateShowDeleteBtn() {
+  const count = selectedSeasonIds.size;
+  document.getElementById('showSelectedCount').textContent = count;
+  document.getElementById('showDeleteBtn').disabled = count === 0;
+}
+
+function selectEligibleSeasons() {
+  allShows.flatMap(s => s.seasons).filter(isSeasonEligible).forEach(s => selectedSeasonIds.add(s.id));
+  updateShowDeleteBtn();
+  renderShows();
+}
+
+function clearShowSelection() {
+  selectedSeasonIds.clear();
+  updateShowDeleteBtn();
+  renderShows();
+}
+
+function openShowConfirm() {
+  if (!selectedSeasonIds.size) return;
+  const seasons = allShows.flatMap(s => s.seasons).filter(s => selectedSeasonIds.has(s.id));
+  const bytes   = seasons.reduce((a, s) => a + s.size, 0);
+  document.getElementById('showConfirmBody').innerHTML = `
+    You are about to permanently delete <strong>${seasons.length} season${seasons.length > 1 ? 's' : ''}</strong> from your Jellyfin server.<br><br>
+    Estimated space to reclaim: <strong>${formatBytes(bytes)}</strong><br><br>
+    <strong>This action cannot be undone.</strong> Files will be removed from disk.
+  `;
+  document.getElementById('showConfirmModal').classList.add('open');
+}
+
+function closeShowConfirm() {
+  document.getElementById('showConfirmModal').classList.remove('open');
+}
+
+async function deleteSelectedSeasons() {
+  closeShowConfirm();
+  const toDelete = [...selectedSeasonIds];
+  log(`Deleting ${toDelete.length} season(s)...`, 'warn');
+  let success = 0, failed = 0;
+  for (const id of toDelete) {
+    const season = allShows.flatMap(s => s.seasons).find(s => s.id === id);
+    try {
+      await jellyFetch(`/Items/${id}`, { method: 'DELETE' });
+      log(`Deleted: ${season?.name}`, 'ok');
+      success++;
+    } catch(e) {
+      log(`Failed: ${season?.name} — ${e.message}`, 'err');
+      failed++;
+    }
+  }
+  log(`Done. ${success} deleted, ${failed} failed.`, success > 0 ? 'ok' : 'err');
+  selectedSeasonIds.clear();
+  await fetchShows();
 }
 
 function showHelp() {
